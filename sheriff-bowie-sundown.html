@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sheriff Bowie: Sundown</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rye&family=Alegreya+Sans:wght@400;700;800&display=swap">
+<style>
+:root{
+  --bg:#2b1a10; --ink:#f7e8c9; --muted:#d2b483; --panel:#3a2416; --panel-edge:#8a5a32;
+  --gold:#e9b23b; --blood:#c63c2a; --xp:#f1d36b; --btn-ink:#2b1a10;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#1e120a; --ink:#f7e8c9; --muted:#c9a978; --panel:#2e1c11; --panel-edge:#7a4e2b;
+  --gold:#e9b23b; --blood:#d24a36; --xp:#f1d36b; --btn-ink:#1e120a; color-scheme:dark; } }
+:root[data-theme="dark"]{ --bg:#1e120a; --ink:#f7e8c9; --muted:#c9a978; --panel:#2e1c11; --panel-edge:#7a4e2b;
+  --gold:#e9b23b; --blood:#d24a36; --xp:#f1d36b; --btn-ink:#1e120a; color-scheme:dark; }
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Alegreya Sans",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas{position:fixed;top:0;left:0;image-rendering:pixelated;image-rendering:crisp-edges;display:block}
+#hud{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;display:flex;gap:18px;align-items:flex-start;justify-content:space-between;pointer-events:none;font-weight:700;text-shadow:0 1px 0 #000a}
+.stack{display:flex;flex-direction:column;gap:6px}
+.bar{width:min(220px,40vw);height:12px;background:#0007;border:2px solid #000a;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:100%;background:var(--blood);transition:width .12s}
+#xpbar i{background:var(--xp)}
+#ammo{display:flex;gap:3px;height:14px;align-items:center}
+#ammo b{width:6px;height:13px;background:var(--gold);border-radius:3px 3px 1px 1px;box-shadow:0 0 0 1px #000a}
+#ammo b.spent{background:#0006}
+#reload{font-size:13px;color:var(--muted);margin-left:6px}
+#clock{font-family:Rye,Georgia,serif;font-size:22px;text-align:right;line-height:1}
+#meta{font-size:14px;color:var(--muted);text-align:right}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;background:#120a06b0}
+.overlay[hidden]{display:none}
+.card{background:var(--panel);border:3px solid var(--panel-edge);box-shadow:0 0 0 3px #000, 0 18px 40px #000a;padding:26px 28px;max-width:440px;width:100%;text-align:center}
+h1,h2{font-family:Rye,Georgia,serif;font-weight:400;margin:0 0 6px;color:var(--gold);letter-spacing:.5px}
+h1{font-size:clamp(34px,8vw,52px);line-height:1}
+h2{font-size:30px}
+.card p{margin:8px 0;line-height:1.45;color:var(--ink)}
+.card .small{color:var(--muted);font-size:15px}
+button{font:inherit;font-weight:800;font-size:18px;background:var(--gold);color:var(--btn-ink);border:3px solid #000;padding:10px 22px;margin-top:14px;cursor:pointer;box-shadow:0 4px 0 #000}
+button:active{transform:translateY(2px);box-shadow:0 2px 0 #000}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:3px}
+#choices{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+#choices button{margin:0;text-align:left;background:#5a3820;color:var(--ink);font-size:16px;padding:10px 14px;display:flex;gap:12px;align-items:baseline}
+#choices button:hover,#choices button:focus-visible{background:#74492a}
+#choices kbd{font-family:Rye,Georgia,serif;color:var(--gold);font-size:18px}
+#choices span small{display:block;font-weight:400;color:var(--muted);font-size:14px}
+#banner{position:fixed;left:0;right:0;top:32%;text-align:center;font-family:Rye,Georgia,serif;font-size:clamp(22px,5vw,36px);color:var(--gold);text-shadow:0 3px 0 #000;pointer-events:none;opacity:0;transition:opacity .4s}
+@media (prefers-reduced-motion: reduce){.bar i{transition:none}#banner{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" hidden>
+  <div class="stack">
+    <div class="bar" id="hpbar" aria-label="Health"><i></i></div>
+    <div style="display:flex;align-items:center"><div id="ammo"></div><span id="reload"></span></div>
+    <div class="bar" id="xpbar" aria-label="Experience"><i style="width:0"></i></div>
+  </div>
+  <div class="stack">
+    <div id="clock">5:00</div>
+    <div id="meta">Level 1 · 0 outlaws</div>
+  </div>
+</div>
+<div id="banner"></div>
+
+<div class="overlay" id="start">
+  <div class="card">
+    <h1>Sheriff Bowie</h1>
+    <p>Outlaws are pouring into town. Hold Main Street until sundown.</p>
+    <p class="small">Move with WASD or the arrow keys. On a phone, drag anywhere. Your revolver fires on its own at the nearest outlaw. Pick up gold to level up. Grab a deputy badge to call in Deputy Steven.</p>
+    <button id="go">Ride into town</button>
+  </div>
+</div>
+<div class="overlay" id="levelup" hidden>
+  <div class="card">
+    <h2>Level up</h2>
+    <p class="small">Pick one. Keys 1 to 3 work too.</p>
+    <div id="choices"></div>
+  </div>
+</div>
+<div class="overlay" id="end" hidden>
+  <div class="card">
+    <h2 id="endTitle">Bowie’s down</h2>
+    <p id="endText"></p>
+    <button id="again">Try again</button>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+const SPR = new Image();
+SPR.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAhCAYAAADOHBvaAAAFX0lEQVR4nLWXW4xdVRnHf/t29u3sOde5dAZoWmq5CIiJjTEYQaOWFEPANAK25aKES8FEnfIAiU+gWPShBCOJMV5iG4qhEhpaYgg8aFJCghT6wMWqHenMmTlz5tzPPmevsy/LJwfHtjPnVPu9rW99a/3296219//bCudh22/6qpT9iF63S75QYP/hI8qwewy14IZbr5dFIdGaTSwRYekG/SRGMS3UtMcvX3l94P30QQO33HydJPB57Lt72OxlkK02aW+EerNJftttyi3XbJLDJDG0zb36opz+3NUyeu0P8uFr1ktx7Mh5AYc+m/j1IzLxW+iWQcdvk6QMMtt2XpgzfvzunVIpVWj8429cuXE9ot+h2l5ifHKcTrNDsTBBab6B6uZ55LU/DrSnulbAYztul9UT7zPeh0+NTWH2ApR2G63Xw0sgr0tmT7zNJZpOvtVj75YvD1T6VcEPfesOmcwv8snsKGathSdCRK3GxEiGq6bW0ynNIkWTjBnzibzHSKfNRJgMwl0d3K1UcUWMF8RkVQ1LQta2qczN0atUcXW466kf4I4ZfPTRe1hqn6w22F1bFVzQTdIiIacaJEFAFPZBUxnL54nqHW5/+mlIdbnzV0/RdQTNsIrjavz0ys+uSV8VrHUDHKmgRhH1ZgPTdWg0GshYcvXmyzl4/wNgafzoO98m1GJiNWaxMs8Vl2363zLOWja2bTO3VOaiSzcgDR3bSSOlwvHjJ3Atl2emHwU/wdIN1q1bR3rE5a8n3zt/8BP33yOXFsr0lJBAlZTbDdqiB4lC2vG49jNb8FuCbOgwpReQPixV6mi2Q6iufcHOCt759Rtl+fQcsUzoagrGRBHVc2n5XRzTZmmhxrF33mXDxitQ5iJGOxmy2ihhYnJyfgHpWGuCz3jZH7z7DmmKPvueO7Q8t/cL10nHF0xZaaJqg4svmuTE3z/EtVNszGY5deoUhQ2X0kqZxIUc79cqKIUMfUPhyecOn/WDssL54H13SdMX7Dtw8Izg327dKpWFOo7fJ2UZmOvHKZ2epShUvEyO00mfXW/9WQF4dPvXpFfM0awtYoSCkZSOl3YQcUQrCrlvz/TH6vTw7l1StDo8e+DQ2T95jk2kNrDSLmEYMjMzQzafQ7ZjqmGAOTm2HPrkCy8rAI/suFm6jkO/3aZVaxERYdg2E9feqOjvHvu9PLj/1+haj8f3nwMKLIUB08ffVI5+cav0SyU81ySOBHXDp0OCqafPWPOTAx+X+YndO2QkAqrlBU7/6UWpABx/9efSsQtc9vnbzgn+2Te/ISfihO3Pv6AcvuF62Wg1UWwV1dMJTI2lEH5x9A0UU6MaxtST1QVIB/j0V3avqSgd4VPxuxzc9iU5888ZMsU8ggjHtSiVF9FyRUxgQcTUB1C9gTuQIA4ZcXR0M8XY5kvoxQJUg3LPZ93mTbRClT5QG1BqBwZLQ8OPA4RlU262UWydvpLg5gqcnC+x95W3lTEYuBtZU4//bZGq4hYKnFqq8P2jf1G+d+hNxRgfoyljchdPAbA4REczMPiHzx9RQtVA8bLLvg8WFhGGTqnWGHSb4cEAlYZPoxctj52xSToRGK59YcFSMxkpTC6P9z37khJGElXVLiy40xX0gniFz/M8SAZrd/7TBr7VAI7pYBorlSds+RAGQ4OHyjgKA4JuZ4XPM1KoPTE0eKiMR7MOgYhW+FJRgqYb/3/wnbtukllVYdJyCOp1PC+zYt6WCSKRPHPvdil0i0oQsfc3Z8rqf9uapZZJyGgxS6NWxlBD2o3yivlE9Ci6aVrlRRZmZ7GNwYq45pPtmb5Htsvz5BSVH//u6ND/SOeyfwGbSz/5OAhegAAAAABJRU5ErkJggg==';
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+let S = 3, VW = 0, VH = 0;
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  S = Math.min(w, h) > 1100 ? 3 : 2;
+  VW = Math.ceil(w / S); VH = Math.ceil(h / S);
+  cv.width = VW; cv.height = VH;
+  cv.style.width = VW * S + 'px'; cv.style.height = VH * S + 'px';
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', resize); resize();
+
+// ---------- helpers ----------
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const rand = (a, b) => a + Math.random() * (b - a);
+let seed = 7;
+const srand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// ---------- world ----------
+const W = 1400, H = 1000, DURATION = 300;
+const STREET = { y: 370, h: 260 };
+const CROSS = { x: 640, w: 140 };
+const BSPR = {"house": {"w": 54, "h": 118, "sx": 2, "sy": 24, "sw": 52, "src": "data:image/png;base64,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"}, "saloon": {"w": 54, "h": 88, "sx": 2, "sy": 8, "sw": 52, "src": "data:image/png;base64,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"}, "jail": {"w": 56, "h": 62, "sx": 0, "sy": 0, "sw": 56, "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA+CAYAAAB+39gDAAAGCElEQVR4nOWa3UsWWxTGf6+ZZWWfWmYfZl2IIPgNRV6IBPo3FBEaRBBoQpddBF51a9FFgogk/gH+ARoEXaSgYBpBUplEfpTRt5pzLjyPc/bSme3hnDind56beWdmz5797mevtZ619oAHra2tQWtra+Br939Fxn89gF+NTHuhpaUlAOjo6EgBLC0tAdDU1BQAbNmyBYDt27cDkJGxOkdv374F4NOnTwCcO3cOgBs3bqR+2eg3gbRncN3sXr58OQDYuXMnAD9//gQgJycHgM+fPwPw7ds35/ru3buBkMEPHz4AIeN67sSJEwB8/PjRuX7kyBEAbt++/a8ynjwGL126FAAcP34cgJcvXwKQmblqrtnZ2QAsLy8D8P37dyBkSu2ysrKAkGExum3bNuc53de5VsLCwgIAP378cPq9f//+32I4OQxevXo1gNArvn//HoBjx44B4QwLsk3NrI5fvnwBwpkX4zqKma9fvwKwZ88eAFZWVpyjoPszMzMAFBcXAzA5OQnA0aNHAWhvb9+Q2eQweP369QDCmTp58iQAr1+/BmDHjh3Og2Jw69atQGhb8q6Li4tAyJzO1U42KsbVTxAEzlFeNjc3F4CpqSmnHzGs92il3b17NwUJYHBNyVibUJySYpGiUXzUuRiT7cgWU6nVxWFtVZDXla3qXN7ZxmG9R0zK+0pB6Tn1IySHQUHes6SkBIBbt26lAKqqqgKA4eFhx1tdu3YtgNBW9u/fD4TeUl7YKhfrfTXzss25uTmnP91/9+4dAHv37nXai0HZ5sWLF1ejwmZm4XdGpnI92ZTiirypoBmzGBsbA+Dhw4cOs2L8wYMHscqjtrY2AHj06FFsu5KSkgDgwoULznvlMw4dOgSEK3At24nrNB2QKY2of6zzXbt2OQ219uvq6gKAwcHBFIRr36KgoACA4eHh2AEo3vkgjXrz5k2H6YaGhuCv4yssLASgs7MzIXGwp6cnBaE3lKJQ3BHGxsZSAKdPn3amXN7RYmJiYlMDsBo3ClphFso/8/PzgTCeC+nP4NqPP+OR4oidCTGnbEMQ4xbybmfOnAkAHj9+vKGX1Pt8kGa1kNKRl1c0EJLDoBTB9PQ0AL29vc6My1sODQ0518WUhRRPRUVFrJu0GtWiuro6iGsnzSstLEaF5DAo7SdGmpubA4Curq4UhOrdwtqqhVaGxdmzZ538Mwp678DAwIY2rLgtJpV3CslhUN5Q8ebevXvOjFnvJETZoKCZtZBNP3v2LFaDSltGQfHP5qNtbW0JySb0Q7aifM3CKhshKj4JtkomRDFrEaVgBI1X8Vm1o7Xrm3rLb4x1XjTK69n4IviUiLSixb59+zY1QKucLORl5SNUSejr60tINqEfqp1Y22hsbHSyjJGREee+Lxs4fPgwsD67mJ2d3dQAfQyq38rKSiCsj54/fz5hXlT1STtjqmyPj49v6PZs5m8hm7BQtcwHn5dubm4G1isxxcPkMKjM3MYtVdnGx8c37CDKSwpSGhbSkKWlpQGEFQOLKA0sqLqmGpD2LkpLS4EkMai1a7OD58+fx3Zg1bvFmzdvNrz+5MmTFEBNTU1svujrX4ypLqq9/levXgFJYjDKi546dQoI9+otfFoxShkJ8/Pzsfd9Nq5dKI1DikvPJYdBKRhb+5C3i4Jvhn0MFxUVAeGeu4X2A6MgDaqj/sfBgweBJDGo/TebNfiUSl5eXuz9qHxQ8O1N+LSuHbeigOqkyWFQMyVvKkjjRcHnBX0MRe1tCFG1IEE2Z2tKquUkh0HVMpQXCoozkR14KtM+L+vLFnxeOKqinbyajGzlxYsXTgP73YmFL+M+cODAP7rv86L2yyj5kLKystXxxT6dBlhjUOpb38cIPjWvGkgUfJVpX77ng1aQqnuySe3lpz+DV65cCSDUbvpaQfAx5NOqPoaePn0ae9/nRa0NJm93SWu3vb0dgKamJqdBlA3W19cH4FcyPi9cXl4OhJm5RdR3OILin45WOaU/g3fu3EkBLC4uBgDd3d1OdUu1EwvN2OjoaOw2UdSulNDf3x/7vM8GrRa1PiPtGfwDiz29dCYYi3IAAAAASUVORK5CYII="}, "well": {"w": 36, "h": 60, "sx": 0, "sy": 32, "sw": 36, "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAA8CAYAAAAOhRhuAAAE60lEQVR4nM2Zy24cVRCGv+7puXnG41vigEXAoABLVgQpiCBEHEQiIIgdSrICZQ8rJF6BB7CyYcUGFHHZgAnJAoIUARLCUZClkJVDfJftGY+dme4+LKpOm+7Yoxlj4VObnj5d51J/V/1V1ePRpZw+ccIAPD1yGIBzZ84AMDl5GYD65hYATxw7BkDs5wG4OzsLwMiRUQA+//Yrr9M+frcH+r8keOOlkwYgxACQGx0AoG1iAMK1TQCmfrjuAUzpxIvvXTQAX/z+a9rimVs7bvTWqxOmmwO5h1AQBAB8c/1ax3eblenmUk8bGS/qSs9BhLy9nSkslnrSzxdyXem5h1DYbu9pYp/pDaGw9aArPfcQ8v2egiuRXLvQm74nNPTuudcMwGdffrfjxu4hlNtjlFULgz3pX/n+Rw/gnddf7sjY7iHU0iy9m3xw/m0D4OcqADS8IQDuzy8AcOn9Dw3A5OVPunLGKOrM2O4hVCoWOysYeeUvHH8egPm4DEBtpB+AlfpKTxs2m1I9vHlK6quvr/6cQtY9hFZXVzsqDA1KfVRfkezuBYLMRizIVaJWTxtO/fSbBzBx8viO0eYeQsWgcxZurq8BMLv2JwAlvw+AdigGPlvqjbGtFAaGdxx3D6Hh4Z1PaqWxXgegv1oDoBxvAHDvzl8AjI2P72njpZV1AF489YoBuHFVanb3ENpoNDoqjAxJlK0tLwLQLojvPPPcYwDcX+qttrZy84bwz8Tps6locw+hnHYdu8nHn17ZW8HUpbTW02/IPYSa7c0DPUA1F6bu3UPo8SfH5dfNXw7kAGPDtdS9ewjN3JYcdemsdAMLi3MAGF8qO1tyR5rd875UjhiJTuPFupRetYf39N5XlvH1a0ohJ7lvePgQANO3Z1IHcg+hsUceBaBRl5zlq6GVPsnqRvupwFe+amt1YHL6XCbEqocnUWMRsSRmkYra8ry+vAzAU0ePAnDtzl3R2xez9lGCvDpJFIkJtT7xEV8tr9clK8e+IFKMpQb3jc5TSL2ML1lkLXBamlPOy7fH5RWpxfuHDqUO5B5CWw2pbzbrklPKRYmCYkHOWgrEoiGth1rr0sf5sXhH7MnVJFdrY9qH9DGVkiAcVasA1Gr9qQO5hxDKLwMVOWkhkDN6SDS0mnLdjCQKi0i0+co3sfURRSAm05nquI2ypvpkGIqe5T0r7iEUKy94iky4JV+6SkWJqnJefCrIqaktscxGTawmmdjykaxnEbNRZmPQUn9/v7yRRiv9Bc89hAoFQSBqCzIFX84Y6zs2keYk5SGjX9ySQthL845JvsgpJomirNtSRGpVyQRzfzvvQzYKdMC+czLjVkxSYVuf0asydpzRs/xjkQqUhxYWpYupDLpeD/U6wSJigbRIRJaHMj2Kn0E8jDQKNQPkgvS3AfcQ2mZYEZOxMMnhOm6yzJzM93U85t+SvoNIJxY1uttt13nIWuBnfMHeWyS2G3DlqYR/dls6bav1pWpZ+Ge9KVWD0Rr7owvnzcOzHJDEhx7yiSxCmWtSMdqVFDHPJjcv3XV4qm8XLmqO3NiSFW79MS36/9GgfZcgi0yWX7JRkpWkq8g+UES8pC/T9ULhobz+r29z5+Do4Z3XOWgJWnpCMtk81D4sCsS0OCfPs0y83WWk760kw4pYX1Gi7N7cPABHxqQvqz+QasM5hP4BR1qhjS8F9TwAAAAASUVORK5CYII="}};
+Object.values(BSPR).forEach(s => { s.img = new Image(); s.img.src = s.src; });
+// 8 lots along Main Street: top row sits on the street's north edge, bottom row hangs below the south boardwalk
+const LOTS = [
+  { cx: 180,  top: true,  kind: 'house' },
+  { cx: 460,  top: true,  kind: 'saloon' },
+  { cx: 880,  top: true,  kind: 'house' },
+  { cx: 1160, top: true,  kind: 'house' },
+  { cx: 190,  top: false, kind: 'jail' },
+  { cx: 470,  top: false, kind: 'house' },
+  { cx: 900,  top: false, kind: 'house' },
+  { cx: 1180, top: false, kind: 'house' },
+];
+const buildings = LOTS.map(l => {
+  const s = BSPR[l.kind];
+  const x = Math.round(l.cx - s.w / 2), y = l.top ? STREET.y - s.h : STREET.y + STREET.h;
+  return { x, y, w: s.w, h: s.h, kind: l.kind, top: l.top, solid: { x: x + s.sx, y: y + s.sy, w: s.sw, h: s.h - s.sy } };
+});
+// town well in the middle of the crossroads
+const WELL = (() => { const s = BSPR.well, x = Math.round(CROSS.x + CROSS.w / 2 - s.w / 2), y = Math.round(STREET.y + STREET.h / 2 - s.h / 2);
+  return { x, y, w: s.w, h: s.h, kind: 'well', solid: { x: x + s.sx, y: y + s.sy, w: s.sw, h: s.h - s.sy } }; })();
+const solids = buildings.map(b => b.solid).concat([WELL.solid]);
+const props = [];
+// barrels & trough along boardwalks
+[[300, 392], [610, 392], [612, 404], [770, 610], [1010, 392], [330, 610]].forEach(([x, y]) => props.push({ kind: 'barrel', x, y, w: 10, h: 10 }));
+props.push({ kind: 'trough', x: 470, y: 400, w: 34, h: 10 });
+props.push({ kind: 'trough', x: 880, y: 600, w: 34, h: 10 });
+seed = 11;
+for (let i = 0; i < 46; i++) {
+  const x = 20 + srand() * (W - 40), y = 20 + srand() * (H - 40);
+  const inTown = y > 160 && y < 840 && x > 50 && x < 1330;
+  if (inTown) continue;
+  props.push({ kind: 'cactus', x, y, w: 8, h: 8 });
+}
+props.forEach(p => solids.push({ x: p.x - p.w / 2, y: p.y - p.h / 2, w: p.w, h: p.h }));
+
+function inSolid(x, y, pad = 0){
+  for (const s of solids) if (x > s.x - pad && x < s.x + s.w + pad && y > s.y - pad && y < s.y + s.h + pad) return true;
+  return false;
+}
+function pushOut(o){
+  for (const b of solids) {
+    const nx = clamp(o.x, b.x, b.x + b.w), ny = clamp(o.y, b.y, b.y + b.h);
+    const dx = o.x - nx, dy = o.y - ny, d2 = dx * dx + dy * dy;
+    if (d2 >= o.r * o.r) continue;
+    if (d2 === 0) {
+      const l = o.x - b.x, r = b.x + b.w - o.x, t = o.y - b.y, bt = b.y + b.h - o.y, m = Math.min(l, r, t, bt);
+      if (m === l) o.x = b.x - o.r; else if (m === r) o.x = b.x + b.w + o.r;
+      else if (m === t) o.y = b.y - o.r; else o.y = b.y + b.h + o.r;
+    } else {
+      const d = Math.sqrt(d2); o.x = nx + dx / d * o.r; o.y = ny + dy / d * o.r;
+    }
+  }
+  o.x = clamp(o.x, o.r, W - o.r); o.y = clamp(o.y, o.r, H - o.r);
+}
+
+// ---------- prerendered town ----------
+const bg = document.createElement('canvas'); bg.width = W; bg.height = H;
+function drawTown(){
+  const g = bg.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#d8b06a'; g.fillRect(0, 0, W, H);
+  seed = 3;
+  for (let i = 0; i < 2600; i++) { // desert speckle
+    const c = srand() < .5 ? '#c99c58' : '#e4c07e';
+    g.fillStyle = c; g.fillRect(srand() * W | 0, srand() * H | 0, 2, 1);
+  }
+  for (let i = 0; i < 120; i++) { g.fillStyle = '#a88a52'; g.fillRect(srand() * W | 0, srand() * H | 0, 3, 2); }
+  // streets
+  g.fillStyle = '#b98a50';
+  g.fillRect(0, STREET.y + 20, W, STREET.h - 40);
+  g.fillRect(CROSS.x, 0, CROSS.w, H);
+  // wheel ruts
+  g.fillStyle = '#a77a45';
+  for (let x = 0; x < W; x += 4) { g.fillRect(x, 470 + Math.sin(x / 90) * 3 | 0, 3, 2); g.fillRect(x, 528 + Math.sin(x / 70) * 3 | 0, 3, 2); }
+  for (let y = 0; y < H; y += 4) { g.fillRect(684 + Math.sin(y / 80) * 3 | 0, y, 2, 3); g.fillRect(736 + Math.sin(y / 60) * 3 | 0, y, 2, 3); }
+  for (let i = 0; i < 900; i++) { g.fillStyle = srand() < .5 ? '#ad7f48' : '#c69660'; g.fillRect(srand() * W | 0, STREET.y + 24 + srand() * (STREET.h - 48) | 0, 2, 1); }
+  // boardwalks
+  const walk = (x, y, w, h) => {
+    g.fillStyle = '#8a5d34'; g.fillRect(x, y, w, h);
+    g.fillStyle = '#6e4626';
+    for (let px = x; px < x + w; px += 7) g.fillRect(px, y, 1, h);
+    g.fillStyle = '#4a2c16'; g.fillRect(x, y + h - 2, w, 2);
+  };
+  buildings.forEach(b => b.top ? walk(b.x - 14, b.y + b.h, b.w + 28, 24) : walk(b.x - 14, b.y - 24, b.w + 28, 24));
+  const shadow = b => { g.fillStyle = 'rgba(60,30,10,.28)'; g.fillRect(b.solid.x + 3, b.y + b.h - 2, b.solid.w, 5); };
+  [...buildings, WELL].forEach(b => { shadow(b); g.drawImage(BSPR[b.kind].img, b.x, b.y); });
+  props.forEach(p => drawProp(g, p));
+}
+function shade(hex, f){
+  const n = parseInt(hex.slice(1), 16);
+  const r = clamp((n >> 16) * f, 0, 255) | 0, gg = clamp((n >> 8 & 255) * f, 0, 255) | 0, b = clamp((n & 255) * f, 0, 255) | 0;
+  return `rgb(${r},${gg},${b})`;
+}
+function sign(g, cx, y, text, big){
+  g.font = (big ? '16px ' : '10px ') + 'Rye, Georgia, serif';
+  const tw = Math.ceil(g.measureText(text).width) + (big ? 16 : 10), th = big ? 22 : 14;
+  g.fillStyle = '#2a1a0e'; g.fillRect(cx - tw / 2 - 2, y - 2, tw + 4, th + 4);
+  g.fillStyle = big ? '#f0d9a0' : '#e6cf98'; g.fillRect(cx - tw / 2, y, tw, th);
+  g.fillStyle = big ? '#8a1f14' : '#3a2412'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(text, cx, y + th / 2 + 1);
+}
+function drawFront(g, b){
+  const { x, y, w, h } = b;
+  // false front with stepped top
+  g.fillStyle = shade(b.wall, .65); g.fillRect(x, y, w, h);
+  g.fillStyle = b.wall; g.fillRect(x + 2, y + 6, w - 4, h - 6);
+  g.fillStyle = shade(b.wall, .82);
+  for (let py = y + 10; py < y + h; py += 6) g.fillRect(x + 2, py, w - 4, 1);
+  g.fillStyle = shade(b.wall, .5); g.fillRect(x, y, w, 6); g.fillRect(x - 3, y + 4, w + 6, 3);
+  // windows
+  const win = (wx, wy, ww, wh) => {
+    g.fillStyle = '#3a2412'; g.fillRect(wx - 2, wy - 2, ww + 4, wh + 4);
+    g.fillStyle = '#29425a'; g.fillRect(wx, wy, ww, wh);
+    g.fillStyle = '#5b7e98'; g.fillRect(wx + 2, wy + 2, 3, wh - 4);
+    g.fillStyle = '#3a2412'; g.fillRect(wx + ww / 2 - 1, wy, 2, wh); g.fillRect(wx, wy + wh / 2 - 1, ww, 2);
+  };
+  if (b.saloon) {
+    sign(g, x + w / 2, y + 14, 'SALOON', true);
+    // balcony
+    g.fillStyle = '#4a2c16'; g.fillRect(x - 4, y + 88, w + 8, 6);
+    for (let px = x; px <= x + w; px += 14) g.fillRect(px, y + 76, 3, 14);
+    g.fillRect(x - 4, y + 74, w + 8, 3);
+    win(x + 30, y + 48, 26, 22); win(x + w - 56, y + 48, 26, 22); win(x + w / 2 - 13, y + 48, 26, 22);
+    win(x + 30, y + 112, 30, 34); win(x + w - 60, y + 112, 30, 34);
+    // batwing doors
+    const dx = x + w / 2 - 22, dy = y + h - 46;
+    g.fillStyle = '#1a0f08'; g.fillRect(dx - 3, dy - 3, 50, 49);
+    g.fillStyle = '#2e1c10'; g.fillRect(dx, dy, 44, 46);
+    g.fillStyle = '#d4a24c'; g.fillRect(dx + 2, dy + 12, 19, 20); g.fillRect(dx + 23, dy + 12, 19, 20);
+    g.fillStyle = '#9a6a2a'; for (let k = 0; k < 4; k++) { g.fillRect(dx + 4 + k * 4, dy + 14, 2, 16); g.fillRect(dx + 25 + k * 4, dy + 14, 2, 16); }
+    // lanterns
+    g.fillStyle = '#f2c14e'; g.fillRect(dx - 12, dy + 4, 5, 7); g.fillRect(dx + 51, dy + 4, 5, 7);
+  } else {
+    sign(g, x + w / 2, y + 14, b.name, false);
+    win(x + 22, y + 52, 30, 30); win(x + w - 52, y + 52, 30, 30);
+    if (w > 220) win(x + w / 2 - 15, y + 52, 30, 30);
+    const dx = x + w / 2 - 14, dy = y + h - 40;
+    g.fillStyle = '#2a1a0e'; g.fillRect(dx - 2, dy - 2, 32, 42);
+    g.fillStyle = shade(b.wall, .55); g.fillRect(dx, dy, 28, 40);
+    g.fillStyle = '#e0b24a'; g.fillRect(dx + 22, dy + 20, 2, 2);
+    // awning
+    g.fillStyle = shade(b.wall, .45); g.fillRect(x - 2, y + 98, w + 4, 5);
+  }
+  // posts on boardwalk
+  g.fillStyle = '#4a2c16';
+  for (let px = x - 4; px <= x + w + 2; px += Math.max(40, w / 4)) g.fillRect(px, y + h, 3, 22);
+  // shadow line
+  g.fillStyle = 'rgba(40,20,8,.35)'; g.fillRect(x - 6, y + h, w + 12, 4);
+}
+function drawRoof(g, b){
+  const { x, y, w, h } = b;
+  g.fillStyle = shade(b.wall, .55); g.fillRect(x, y, w, h);
+  g.fillStyle = shade(b.wall, .8); g.fillRect(x + 3, y + 3, w - 6, h - 6);
+  g.fillStyle = shade(b.wall, .65);
+  for (let px = x + 3; px < x + w - 3; px += 8) g.fillRect(px, y + 3, 1, h - 6);
+  g.fillStyle = shade(b.wall, .5); g.fillRect(x + 3, y + h / 2 - 2, w - 6, 4);
+  // street-facing eave with door hint
+  g.fillStyle = shade(b.wall, 1); g.fillRect(x, y, w, 10);
+  g.fillStyle = shade(b.wall, .4); g.fillRect(x, y + 10, w, 2);
+  sign(g, x + w / 2, y - 18, b.name, false);
+  // drop shadow onto desert
+  g.fillStyle = 'rgba(60,30,10,.25)'; g.fillRect(x + 6, y + h, w, 6);
+}
+function drawProp(g, p){
+  if (p.kind === 'barrel') {
+    g.fillStyle = '#2a1a0e'; g.fillRect(p.x - 6, p.y - 7, 12, 13);
+    g.fillStyle = '#8a5530'; g.fillRect(p.x - 5, p.y - 6, 10, 11);
+    g.fillStyle = '#4a4e5a'; g.fillRect(p.x - 5, p.y - 4, 10, 1); g.fillRect(p.x - 5, p.y + 2, 10, 1);
+  } else if (p.kind === 'trough') {
+    g.fillStyle = '#2a1a0e'; g.fillRect(p.x - 18, p.y - 6, 36, 12);
+    g.fillStyle = '#6e4626'; g.fillRect(p.x - 17, p.y - 5, 34, 10);
+    g.fillStyle = '#4f86a8'; g.fillRect(p.x - 15, p.y - 3, 30, 5);
+  } else {
+    g.fillStyle = 'rgba(60,30,10,.25)'; g.fillRect(p.x - 4, p.y + 4, 12, 3);
+    g.fillStyle = '#2f5a2a'; g.fillRect(p.x - 3, p.y - 16, 6, 21);
+    g.fillRect(p.x - 9, p.y - 10, 4, 3); g.fillRect(p.x - 9, p.y - 15, 3, 6);
+    g.fillRect(p.x + 5, p.y - 7, 4, 3); g.fillRect(p.x + 6, p.y - 13, 3, 7);
+    g.fillStyle = '#4c8240'; g.fillRect(p.x - 1, p.y - 15, 1, 18);
+  }
+}
+
+// ---------- outlaw sprites ----------
+const BASE = { K: '#1c1410', S: '#d9a072', E: '#1c1410', R: '#b8322a', C: '#6b4a2e', V: '#3a2a1e', P: '#4a4e5a', B: '#2a1c12', N: '#9aa0a6' };
+const BODY = [
+  '...KKKKKK...',
+  '...KKKKKK...',
+  'KKKKKKKKKKKK',
+  '...SSSSSS...',
+  '...SESSES...',
+  '...RRRRRR...',
+  '..RRRRRRRR..',
+  '.CCCCCCCCCC.',
+  '.CCCVVVVCCC.',
+  '.CCCVVVVCCC.',
+  '.SCCVVVVCCSN',
+  '...PPPPPP..N',
+];
+const LEGS = [
+  ['...PP..PP...', '...PP..PP...', '...PP..PP...', '..BBB..BBB..'],
+  ['..PP....PP..', '..PP....PP..', '..PP....PP..', '.BBB....BBB.'],
+];
+function makeSprite(map, px){
+  const pal = Object.assign({}, BASE, map);
+  return LEGS.map(legs => {
+    const rows = BODY.concat(legs);
+    const c = document.createElement('canvas'); c.width = 12 * px; c.height = 16 * px;
+    const g = c.getContext('2d');
+    rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== '.') { g.fillStyle = pal[ch]; g.fillRect(x * px, y * px, px, px); } }));
+    return c;
+  });
+}
+// Texas Pete: every outlaw is drawn from his sprite (two walk frames: stand + 1px bob)
+const PETE = new Image();
+PETE.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB8AAAApCAYAAADNjfKJAAAFlElEQVR4nL2Yy29bxxXGfzP3wcclLUq0EhVuIqdWmqiBErtRULdSFmkbwAECNIWBrowi2+z7p3RZZJdVgW7SV4CmRrpwbKNqpLiAU8hOZRvVw3qQIkWK9zFzuiBFipElXiptPmBAzNx7vm/OOXNm5hJOiZ//dE5Oa3sAfVrD/dr219VOLz73/R90PX33yrycGyty9fKFr+W9Svvi1StvS8FTxLUNWrXHjJfyaAcerG5wfvplHlVbfPjxp6n5hhL/KhrXP5BMxmO3FVH+8bVT8Zwq59MgmSTi8o9+wZjnn4YCGNLzX/3sLZHqOmXf4kd7aGvInSnz3h8WTuX5UEbzZ8flnZ/M09xco0BCsZDn0eoG6/WQisnw23v/GorPHfTC3KUfik4sOSM4YcTCP//DufI4ZD3WH9fZ3MtTizyqSTKMLpAi51oUShTWKiKraYSarYZhrWbZbChqSYZQ55h49juDqI6UZfoFpxwETZjE1PbqVKpVao09oiQBrXnw8CHXrlw9tu6LxeKRsYFhBxAFuA7KcxFriKzBmIQkSdCuxvFcsk6eu3fvHstRr9ePjKX2PFECnoP2fKx2iJUgWmG1xiiFm80wMjaali69uFWQWINBMAqMEqyjEFdjNMQmYXN762hSD6E8OnZkLFXYAYxIe65icQBPOeAqBEMslrGzZyHjHWtfrVahvei65ThQXEvHRLsIINKeiKM1rtYgCpGYxFoer60dy2MFlFKI9OIzuNS0Joqibl+0g9IuFkVsDEYsKAftOuTzeeZm558Yfa00IoLv+93nx+5Ib8y+LjZOCPdDsvmA2LRtPAtKwJH2ryhLoqHaqPOtyXOsbqyTC/Ksr66ysrbS5XfQYrDk83mazaZ6ouezM7Py6osXJQgCPln6VAVBAFbQAlo0qtv6g1cul9ndrbP0xaK6uXBDTU9/r483yAW4rkuz2aTfsoPXXnlVnnt2koUvFtXvP/mzgnaejDEoet7qTjsUVLTWGGO6I3/66x/Vay/NypW5NwWgsd8AwPd7p6Caeell8X0fV2lu/eP2kTS88cqc+I5P1IpRotGdkB/A6HbY8RSVRp2l5cU+josXZmRkdIRQYm4u3ILDq911XRY++/uxubdJwvZOjTOFka7wQcilY6UEdms1RsZKR+wX799RAK9fnpdOvrvlNvAIfKE8KRdnLrG9sYUSjWN7RnLIc531sa7m+u2/nMR5ELMnL7iv4vyF51h59G8AtNg2g7KABWU7b1kSE/Ho4cqJXMVi0NcfKB6aiHwxQLkKg0GUxWLABasF5YCVBJKYkSB3IpdW0hfrweJxC7QgYoiiCINBuy6tuIWRBO1prLVUqxWen5o6katWa/YJDhTf398njmO06+D6XreFUUSYxO0JGcMz5ye5d//+iVwCSh2qlIF7ezabxXEcjDE0WvvE1lAqlbAKisUCnueR7FnW1tcpjJwZRIdW8O4vr4nWerDnuVyO/TDk4zs31K0HSyooFNje2eHmyufqo8/+pja3txClWLh/R62uH3+wHEAEJp5+GrF2sOfXb9/oK516q4m4vTnnggDtOgAsr36Z6va6vLzMxMRE+vP8AK7v9R2LURK3V3FKjBYDSsUzJGE0vLgFHLdnplwHK+nFd+sNfN9HKTW8uBGL2F4/imMcx0ltH4H69W/eB4a4Rh0gDEO07uVca/3Ea3EaDP2h2LmN9PVbrdY3J+4eyrnWmr29vW9GvFQq9d1GfM9jfHz8VOIDc/7Om2/JvXtfIjhMTX2XzxeXmJyc7D5PkoRqpfL/Ea9UKhQKBRQu1Z0Kz5z7NnHYu836jksmk+HS1IwExQJPPXWW3330YarNZmDYH1e28bMZ/KzP1s4m2UK2c563YR3Yre9SGhul2Wqw8vBBGt3/PaZfeHGof6f+C5LPZc1rhSHwAAAAAElFTkSuQmCC';
+function peteSprite(scale){
+  const w = Math.round(31 * scale), h = Math.round(41 * scale);
+  const frames = [0, 1].map(() => { const c = document.createElement('canvas'); c.width = w; c.height = h + 1; return c; });
+  const paint = () => frames.forEach((c, i) => { const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.clearRect(0, 0, c.width, c.height); g.drawImage(PETE, 0, 1 - i, w, h); });
+  if (PETE.complete && PETE.naturalWidth) paint(); else PETE.addEventListener('load', paint);
+  return frames;
+}
+const TYPES = {
+  bandit:    { spr: peteSprite(0.85), r: 7, hp: 3, speed: 40, dmg: 8, xp: 1 },
+  gunslinger:{ spr: peteSprite(0.85), r: 7, hp: 4, speed: 34, dmg: 8, xp: 2, ranged: true },
+  brute:     { spr: peteSprite(1.3), r: 11, hp: 16, speed: 26, dmg: 18, xp: 6 },
+};
+
+// ---------- deputy steven ----------
+const STEVEN = new Image(); STEVEN.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB0AAAAgCAYAAADud3N8AAAEWklEQVR4nLWW228UdRTHP3Ofnd3udnfb3VIkRYwG5JLghYJVKyBggJSLxhAVQ4wPPum/QRRjgr7ggz6YQIRIlARCKWLlJoLYYiHReEHsUsqWLt3b7G1mfr41km7LbIPzOL/v+X5yzvmdkx/M4uvpflZsfW6VmE0sgDyboGQ0AtXSbJn+ods3bhAAm1c9IdK3hwmHTN5a1zmrbCW/wu4Vy0WsKYBXttFEjfnz2vn16hCRRDsTcpij3/b79vItBPjthz4RD1vkM7fJZdLMbWulhMa8zp6GfBrqqetUWLi4i2jEZOuWd6jYGap2thELoMFMh04dEgHZRaOCU8qSiIYoSRaJzh3/X6bNoSCmLvPVwQMkYhHyd8cRTqURi8ahZbvIng/ex6mW+HjvR0g4BE2tYajvsmxeuVQse+wh5raG+flCP08uW8jv1wYZK7h48YXs7/vJt5fqVxiPRhm8PMgfhuDh9jjnz5xjbrKZcMjCFo3tGN/qgG6RTMzB0EwK+TJtbe3s3v0hbs2jXCiy44XnfS+KaUuy7aVNopi3sXQNS5PIjPxDLKyjuEUCisu+T/aAV4Y583l9y9tgRtl/9ryvEk8R9axfK1TFIJ8t0Hf+9OT5rhfXiuJEmvaWEKKSJX93lM+OHObNjT2EWxbhqk38fXOYjkcfYd+RYzPC7znc+comcf36MGcv/zIlaNfadSI7PkJzQMYtZ2kyQVc8HE8hUzTw5CAHBgakTUsXC0eWQVfpvTRQFz7Z0y3rukQ6na4LBHCERyQcxbartEQTKLJJLltBQqettQ3P8wA4OnRN6r0yJEVicbpXLBcbN6yZ0msZoKfraUFNpvf0pWnLUq5WKJcrtMSTlGyXWllBJoimhMjmbb68cuWe2IO9J6XvLw5ICIUNq1eLoGYIFUQsFBbyzvVPCUnIfNN/ZsY+CFlCURRu3bqNougYZohocwK75KKo00/esRN9kusKarUKDkiZQk5Svzjhb6gVRcHUNVTXwfXA8zwqbo1SrYp7n8k7ebpf0mGyzL7nVNM0isUiAcuiULJBlnGER7w1gZCV+8ZX/3NpfUNz+TyekLDLFXQriKSpSKrGnYkJoi1xvzaNQWOxGB0dHeTtIo7rcjdfwAyHMYIhBq8O8d6r23xvJN+7d2xsjDupFC2RZhAeqiqTSt9BNw0WLV5CauSmXyv/0EAgQDgS4fO+k5O9eXd7j7hx4wblzDh6MOAb6ru8ViBAwbbv+bf38BFJMg0Mw8CpVB88NJVKEYvFpvz/+txFSZYVDE1/8NAlix5neLh+32zbxlB8d8o/9Pqff7FgwYK6Z01WkGrR/4vfNzTZGmd0dLTuWaVURfb8P/ZnrMnLq7uFperossTIyAjReGtdXcAwsYDXVnaK/Rd+vO9anVawfc0aIbsOpVwOFYlkMsmnx4/X1b/xTJfwcnlcQ8OKRSl4Loe+/W5a72kzPXzqlO/XnaOqGJEImqkxXigg9Jlv8r89vKLIOso8CwAAAABJRU5ErkJggg==';
+const BADGE = new Image(); BADGE.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAZCAYAAAA14t7uAAAD5ElEQVR4nK2VS49UVRDHf1V17qN7HjQhGMCEKAkk8gwbEmXLZ/Cj+SWMWxNNTHRDjBEmiDziwqBEcGZkeqaH6dt97z1VLnoYH8PAhlqenP+v6l/nVAreYUT8HBFrAZDeLfgJIhkABWi7+/FmwcNo8r033gEYTx6w1z8m+rXQ8YuHsb17l4ivjxROpvcZT9beWnHTPqWLZ4TMSE3znDY9AvKRgi5+ZdZP3gpW28VSIJJRYgfsT2CdiNfbLaodirT1Ruh048tQGaOeIQta1zOG5S7jyT2gPSSIlz+FMqFKHZEfHEock0cx++uzmMfnDMqG2SQh6aYkIqPhJGvw8V1i8m2wUkEsI3pFSA0WGWGbtr1D3rsdagph0Ab0dwj7HrVfMAlynAEgRS7BV5Fik+32G4bxmLo5DcUHxN4PQfOcXluyb9KkLxAtSV4gYagYYXu4rqMyBZuDThdg7weELhPlBuVwHY8d5u0WMh3j7QbOLlFvUxQTXDZBOnBdgK3CUEwEQ+iRgxYl8irkY0SuGQxnSJ6S2w1cZoRtobZHVf1BVc5p2wQkVGeoOOoJIiEShJTQr4AvE/FjJCsSnhrQKe18immHaEdKM7AJyAxkF3ondUNEDEuOiCBeEl7gMsc9gY4gLwMtqRxMyfVTJP1O35SQBZMJIbuolEQE0grZh6QYIaIIjkhAXoKwxRhHwSv3UJGKEqLoEc2U9QrSByIzPDfgCY0CZYDJ8n73HFDCe2BGKIjk/URzkB4oSeVwRM4nmEwqjlU1RkZRkghiGbyEPIQMYVuLMxSRFpdNHCdYQS1o+t9YPXkOEFT0hli+ROGXyf0qnoXsiss/L4wXC8uWgTmRAw/Q1GJVh5rT+ZxyoJgGIpclAaT2FnUcp+9uEzZGI1FYgYmD6IF9osbdyH2JmhGxhEjgJLInlpbeA44R8TAUwFavSpUuoXIcl0R28FA8CsILIpSghEg4BWjCMfq+pm1rel9B4iTGR8CHiFwUPfjQoxtSVKuI1riAs4Blr3CvQWq6rIgpVvaEBfO+oJuPIJ+i0MvAx8C1/QH5V1TlBWK+yVx2cN0hUEKCsAZRx91RMcScIIMrwSqVncfKq8B5RK4I7G+QVyHFp5LyTcTPAjWhGbcxUT5DqnXEenIYXRYCwSpnuLSC1deguH4APVQxgHEeyecgT+llC48XixFWJ1Kiz0bkAmSZqiyx4gJwAZGL8p8i/w8GiParaNv7dPkJmXVUtxHt6VpIxYil+hRi7wNngLOI3DrEeS0YIOK7gGfAFvASmAMBDIARcAI4jcgnr2UcCV7A1wKmQMNiuyiL7g2AISLXj9T/DUMa/3Z9jVKsAAAAAElFTkSuQmCC';
+const BADGE_CHANCE = 1 / 10, BADGE_LIFE = 20, DEPUTY_TIME = 5;
+const DEP = { rate: .07, dmg: 6, range: 220, speed: 360 };
+
+// ---------- state ----------
+let state = 'title', t = 0, kills = 0;
+let player, gun, enemies, bullets, ebullets, gold, parts, floaters, spawnT, waveFlags, level, xp, xpNeed, shake;
+let pickups = [], deputy = null;
+function reset(){
+  t = 0; kills = 0; level = 1; xp = 0; xpNeed = 5; shake = 0;
+  player = { x: 460, y: 500, r: 7, hp: 100, maxHp: 100, speed: 72, face: 1, inv: 0, step: 0, magnet: 55, moving: false };
+  gun = { rate: .5, cd: 0, mag: 6, ammo: 6, reload: 1.3, reloadT: 0, dmg: 2, pierce: 0, shots: 1, range: 210, speed: 300, flash: 0, aim: 0 };
+  enemies = []; bullets = []; ebullets = []; gold = []; parts = []; floaters = []; pickups = []; deputy = null;
+  spawnT = 1; waveFlags = {};
+  buildAmmo();
+}
+
+// ---------- input ----------
+const keys = new Set();
+addEventListener('keydown', e => {
+  keys.add(e.key.toLowerCase());
+  if (state === 'levelup' && ['1', '2', '3'].includes(e.key)) pick(+e.key - 1);
+});
+addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+let stick = null;
+cv.addEventListener('pointerdown', e => { stick = { ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY, id: e.pointerId }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (stick && e.pointerId === stick.id) { stick.x = e.clientX; stick.y = e.clientY; } });
+const endStick = e => { if (stick && e.pointerId === stick.id) stick = null; };
+cv.addEventListener('pointerup', endStick); cv.addEventListener('pointercancel', endStick);
+function inputVec(){
+  let x = 0, y = 0;
+  if (keys.has('a') || keys.has('arrowleft')) x--;
+  if (keys.has('d') || keys.has('arrowright')) x++;
+  if (keys.has('w') || keys.has('arrowup')) y--;
+  if (keys.has('s') || keys.has('arrowdown')) y++;
+  if (stick) {
+    const dx = stick.x - stick.ox, dy = stick.y - stick.oy, d = Math.hypot(dx, dy);
+    if (d > 8) { const m = Math.min(1, d / 50); x = dx / d * m; y = dy / d * m; }
+  }
+  const d = Math.hypot(x, y);
+  return d > 1 ? { x: x / d, y: y / d } : { x, y };
+}
+
+// ---------- spawning ----------
+function spawn(type){
+  const T = TYPES[type];
+  for (let tries = 0; tries < 20; tries++) {
+    const a = Math.random() * Math.PI * 2, R = Math.max(VW, VH) / 2 + 30;
+    const x = clamp(player.x + Math.cos(a) * R, 10, W - 10), y = clamp(player.y + Math.sin(a) * R, 10, H - 10);
+    if (Math.hypot(x - player.x, y - player.y) < 140 || inSolid(x, y, T.r)) continue;
+    const hpScale = 1 + t / 150;
+    enemies.push({ type, T, x, y, r: T.r, hp: T.hp * hpScale, maxHp: T.hp * hpScale, flash: 0, cd: rand(1.5, 3), step: Math.random() * 2, side: 0, sideT: 0, face: 1, kx: 0, ky: 0 });
+    return;
+  }
+}
+function pickType(){
+  const r = Math.random();
+  if (t > 120 && r < .08 + t / 3000) return 'brute';
+  if (t > 40 && r < .35) return 'gunslinger';
+  return 'bandit';
+}
+function banner(text){
+  const b = document.getElementById('banner'); b.textContent = text; b.style.opacity = 1;
+  clearTimeout(banner.h); banner.h = setTimeout(() => b.style.opacity = 0, 2400);
+}
+
+// ---------- upgrades ----------
+const UPGRADES = [
+  { name: 'Quicker draw', desc: 'Fire 15% faster', ok: () => gun.rate > .14, apply: () => gun.rate *= .85 },
+  { name: 'Bigger cylinder', desc: '+2 rounds before reloading', ok: () => gun.mag < 16, apply: () => { gun.mag += 2; gun.ammo = gun.mag; buildAmmo(); } },
+  { name: 'Speed loader', desc: 'Reload 25% faster', ok: () => gun.reload > .35, apply: () => gun.reload *= .75 },
+  { name: 'Heavy slugs', desc: '+1 damage per shot', ok: () => true, apply: () => gun.dmg += 1 },
+  { name: 'Piercing rounds', desc: 'Bullets pass through one more outlaw', ok: () => gun.pierce < 4, apply: () => gun.pierce++ },
+  { name: 'Fan the hammer', desc: 'One extra bullet per shot, in a spread', ok: () => gun.shots < 5, apply: () => gun.shots++ },
+  { name: 'New spurs', desc: 'Move 12% faster', ok: () => player.speed < 120, apply: () => player.speed *= 1.12 },
+  { name: 'Shot of root beer', desc: '+20 max health and heal fully', ok: () => true, apply: () => { player.maxHp += 20; player.hp = player.maxHp; } },
+  { name: 'Gold fever', desc: 'Pull in gold from farther away', ok: () => player.magnet < 160, apply: () => player.magnet *= 1.5 },
+  { name: 'Long barrel', desc: 'Shoot outlaws from farther away', ok: () => gun.range < 340, apply: () => gun.range += 40 },
+];
+let offered = [];
+function levelUp(){
+  state = 'levelup';
+  const pool = UPGRADES.filter(u => u.ok());
+  offered = [];
+  while (offered.length < 3 && pool.length) offered.push(pool.splice(Math.random() * pool.length | 0, 1)[0]);
+  const box = document.getElementById('choices'); box.innerHTML = '';
+  offered.forEach((u, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `<kbd>${i + 1}</kbd><span>${u.name}<small>${u.desc}</small></span>`;
+    b.onclick = () => pick(i);
+    box.appendChild(b);
+  });
+  document.getElementById('levelup').hidden = false;
+  stick = null; keys.clear();
+  box.firstChild && box.firstChild.focus();
+}
+function pick(i){
+  if (state !== 'levelup' || !offered[i]) return;
+  offered[i].apply();
+  document.getElementById('levelup').hidden = true;
+  state = 'play'; last = performance.now();
+}
+
+// ---------- update ----------
+function nearest(range){
+  let best = null, bd = range * range;
+  for (const e of enemies) { const d = (e.x - player.x) ** 2 + (e.y - player.y) ** 2; if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function puff(x, y, col, n, sp = 60){
+  for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, s = rand(10, sp); parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 10, life: rand(.25, .6), col, sz: Math.random() < .5 ? 2 : 1 }); }
+}
+function hurtPlayer(d){
+  if (player.inv > 0) return;
+  player.hp -= d; player.inv = .6; shake = .2;
+  floaters.push({ x: player.x, y: player.y - 40, text: '-' + Math.round(d), life: .8, col: '#ff6b55' });
+  if (player.hp <= 0) finish(false);
+}
+function update(dt){
+  t += dt;
+  // events
+  if (t >= 60 && !waveFlags.a) { waveFlags.a = 1; banner('Gunslingers in town'); for (let i = 0; i < 6; i++) spawn('gunslinger'); }
+  if (t >= 150 && !waveFlags.b) { waveFlags.b = 1; banner('The whole gang rides in'); for (let i = 0; i < 18; i++) spawn(i % 6 ? 'bandit' : 'brute'); }
+  if (t >= 240 && !waveFlags.c) { waveFlags.c = 1; banner('Last stand before sundown'); for (let i = 0; i < 5; i++) spawn('brute'); }
+  if (t >= DURATION) return finish(true);
+
+  // spawning
+  spawnT -= dt;
+  if (spawnT <= 0) {
+    spawnT = Math.max(.22, 1.3 - t / 260);
+    const n = 1 + Math.floor(t / 70);
+    for (let i = 0; i < n; i++) if (enemies.length < 220) spawn(pickType());
+  }
+
+  // player
+  const v = inputVec();
+  player.moving = v.x || v.y;
+  player.x += v.x * player.speed * dt; player.y += v.y * player.speed * dt;
+  if (v.x) player.face = v.x > 0 ? 1 : -1;
+  if (player.moving) player.step += dt * 10;
+  pushOut(player);
+  player.inv = Math.max(0, player.inv - dt);
+
+  // gun
+  gun.flash = Math.max(0, gun.flash - dt);
+  const target = nearest(gun.range);
+  if (gun.reloadT > 0) {
+    gun.reloadT -= dt;
+    if (gun.reloadT <= 0) { gun.ammo = gun.mag; buildAmmo(); }
+  } else {
+    gun.cd -= dt;
+    if (target && gun.cd <= 0) {
+      const base = Math.atan2(target.y - 6 - (player.y - 20), target.x - player.x);
+      gun.aim = base;
+      for (let s = 0; s < gun.shots; s++) {
+        const a = base + (s - (gun.shots - 1) / 2) * .16;
+        bullets.push({ x: player.x + Math.cos(a) * 10, y: player.y - 20 + Math.sin(a) * 10, vx: Math.cos(a) * gun.speed, vy: Math.sin(a) * gun.speed, life: gun.range / gun.speed + .1, pierce: gun.pierce, hit: new Set(), dmg: gun.dmg });
+      }
+      player.face = Math.cos(base) >= 0 ? 1 : -1;
+      gun.flash = .07; gun.ammo--; gun.cd = gun.rate;
+      if (gun.ammo <= 0) gun.reloadT = gun.reload;
+      buildAmmo();
+    } else if (!target && gun.ammo < gun.mag && gun.cd < -1.2) {
+      gun.reloadT = gun.reload; // reload when the street is quiet
+    }
+  }
+
+  // enemies
+  for (const e of enemies) {
+    const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx, dy) || 1;
+    let mx = dx / d, my = dy / d;
+    if (e.T.ranged) {
+      if (d < 110) { mx = -mx; my = -my; }
+      else if (d < 150) { const tx = -my, ty = mx; mx = tx * .6; my = ty * .6; }
+      e.cd -= dt;
+      if (e.cd <= 0 && d < 230) {
+        e.cd = rand(1.8, 2.6);
+        const a = Math.atan2(dy, dx);
+        ebullets.push({ x: e.x, y: e.y - 16, vx: Math.cos(a) * 120, vy: Math.sin(a) * 120, life: 2.2 });
+        puff(e.x + Math.cos(a) * 8, e.y - 16 + Math.sin(a) * 8, '#fff2c0', 3, 30);
+      }
+    }
+    if (e.sideT > 0) { e.sideT -= dt; mx += -my * e.side * 1.4; my += mx * e.side * 1.4; const m = Math.hypot(mx, my) || 1; mx /= m; my /= m; }
+    const ox = e.x, oy = e.y, sp = e.T.speed * (1 + t / 900);
+    e.x += (mx * sp + e.kx) * dt; e.y += (my * sp + e.ky) * dt;
+    e.kx *= .85; e.ky *= .85;
+    pushOut(e);
+    const moved = Math.hypot(e.x - ox, e.y - oy);
+    if (moved < sp * dt * .3 && e.sideT <= 0) { e.side = Math.random() < .5 ? -1 : 1; e.sideT = .7; }
+    e.step += dt * 8; e.flash = Math.max(0, e.flash - dt);
+    if (Math.abs(mx) > .1) e.face = mx > 0 ? 1 : -1;
+    if (d < e.r + player.r + 2) hurtPlayer(e.T.dmg);
+  }
+  // separation
+  for (let i = 0; i < enemies.length; i++) {
+    const a = enemies[i];
+    for (let j = i + 1; j < enemies.length; j++) {
+      const b = enemies[j], dx = b.x - a.x, dy = b.y - a.y, rr = a.r + b.r;
+      if (Math.abs(dx) > rr || Math.abs(dy) > rr) continue;
+      const d = Math.hypot(dx, dy) || .01;
+      if (d < rr) { const p = (rr - d) / 2, ux = dx / d, uy = dy / d; a.x -= ux * p; a.y -= uy * p; b.x += ux * p; b.y += uy * p; }
+    }
+  }
+
+  // bullets
+  for (const b of bullets) {
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    if (inSolid(b.x, b.y + 14)) { b.life = 0; puff(b.x, b.y, '#c89a60', 3, 30); continue; }
+    for (const e of enemies) {
+      if (b.hit.has(e) || e.hp <= 0) continue;
+      if (Math.abs(b.x - e.x) < e.r + 3 && b.y > e.y - e.r * 2.8 && b.y < e.y + 2) {
+        b.hit.add(e); e.hp -= b.dmg; e.flash = .08;
+        const k = Math.hypot(b.vx, b.vy); e.kx += b.vx / k * 90; e.ky += b.vy / k * 90;
+        puff(b.x, b.y, '#a8281c', 3, 40);
+        if (e.hp <= 0) killEnemy(e);
+        if (b.pierce-- <= 0) { b.life = 0; break; }
+      }
+    }
+  }
+  bullets = bullets.filter(b => b.life > 0);
+  enemies = enemies.filter(e => e.hp > 0);
+  for (const b of ebullets) {
+    b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+    if (inSolid(b.x, b.y + 14)) b.life = 0;
+    else if (Math.abs(b.x - player.x) < 7 && b.y > player.y - 34 && b.y < player.y) { b.life = 0; hurtPlayer(10); }
+  }
+  ebullets = ebullets.filter(b => b.life > 0);
+
+  updateDeputy(dt);
+
+  // gold
+  for (const g of gold) {
+    const dx = player.x - g.x, dy = player.y - 10 - g.y, d = Math.hypot(dx, dy);
+    if (d < player.magnet || g.pull) { g.pull = true; const s = 160 + (g.ps = (g.ps || 0) + dt * 400); g.x += dx / d * s * dt; g.y += dy / d * s * dt; }
+    if (d < 10) { g.got = true; xp += g.v; }
+  }
+  gold = gold.filter(g => !g.got);
+  if (xp >= xpNeed) { xp -= xpNeed; level++; xpNeed = Math.round(5 + level * 4 + level * level * .6); levelUp(); }
+
+  for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 80 * dt; p.life -= dt; }
+  parts = parts.filter(p => p.life > 0);
+  for (const f of floaters) { f.y -= 18 * dt; f.life -= dt; }
+  floaters = floaters.filter(f => f.life > 0);
+  shake = Math.max(0, shake - dt);
+}
+function killEnemy(e){
+  kills++;
+  puff(e.x, e.y - 10, '#d8b06a', 10, 70);
+  puff(e.x, e.y - 14, '#6b4a2e', 5, 50);
+  // drop hat
+  parts.push({ x: e.x, y: e.y - 28, vx: rand(-30, 30), vy: -60, life: .7, col: '#1c1410', sz: 4 });
+  const n = e.T.xp > 3 ? 3 : 1;
+  for (let i = 0; i < n; i++) gold.push({ x: e.x + rand(-6, 6), y: e.y - 4 + rand(-4, 4), v: Math.ceil(e.T.xp / n) });
+  if (Math.random() < BADGE_CHANCE) pickups.push({ x: e.x, y: e.y - 6, life: BADGE_LIFE });
+}
+
+// ---------- deputy steven ----------
+function summonDeputy(){
+  if (deputy) { deputy.t = DEPUTY_TIME; banner('Steven sticks around'); return; }
+  deputy = { x: player.x - player.face * 22, y: player.y + 6, r: 7, t: DEPUTY_TIME, cd: .15, aim: 0, flash: 0, face: player.face, step: 0, moving: false, n: 0 };
+  pushOut(deputy);
+  puff(deputy.x, deputy.y - 14, '#f2d64b', 16, 70);
+  banner('Deputy Steven rides in');
+}
+function updateDeputy(dt){
+  for (const k of pickups) {
+    k.life -= dt;
+    if (Math.hypot(player.x - k.x, player.y - 6 - k.y) < 13) { k.life = 0; summonDeputy(); }
+  }
+  pickups = pickups.filter(k => k.life > 0);
+  const d = deputy; if (!d) return;
+  d.t -= dt;
+  if (d.t <= 0) {
+    puff(d.x, d.y - 14, '#d8b06a', 12, 60);
+    floaters.push({ x: d.x, y: d.y - 40, text: 'Adios', life: .9, col: '#f2d64b' });
+    deputy = null; return;
+  }
+  // stick by Bowie's side, on the side he isn't facing
+  const tx = player.x - player.face * 22, ty = player.y + 6;
+  const dx = tx - d.x, dy = ty - d.y, dist = Math.hypot(dx, dy);
+  d.moving = dist > 3;
+  if (dist > 160) { d.x = tx; d.y = ty; }
+  else if (d.moving) { const m = Math.min(dist, Math.max(player.speed * 1.5, dist * 6) * dt); d.x += dx / dist * m; d.y += dy / dist * m; d.step += dt * 10; }
+  pushOut(d);
+  d.flash = Math.max(0, d.flash - dt);
+  d.cd -= dt;
+  if (d.cd > 0) return;
+  // rapid fire, spreading shots across the closest outlaws around him
+  const r2 = DEP.range * DEP.range;
+  const near = enemies.filter(e => e.hp > 0 && (e.x - d.x) ** 2 + (e.y - d.y) ** 2 < r2)
+    .sort((a, b) => ((a.x - d.x) ** 2 + (a.y - d.y) ** 2) - ((b.x - d.x) ** 2 + (b.y - d.y) ** 2)).slice(0, 6);
+  if (!near.length) { d.face = player.face; d.cd = .05; return; }
+  const e = near[d.n++ % near.length];
+  const a = Math.atan2(e.y - 6 - (d.y - 20), e.x - d.x);
+  bullets.push({ x: d.x + Math.cos(a) * 10, y: d.y - 20 + Math.sin(a) * 10, vx: Math.cos(a) * DEP.speed, vy: Math.sin(a) * DEP.speed, life: DEP.range / DEP.speed + .1, pierce: 0, hit: new Set(), dmg: DEP.dmg, dep: true });
+  d.aim = a; d.face = Math.cos(a) >= 0 ? 1 : -1; d.flash = .05; d.cd = DEP.rate;
+}
+
+// ---------- draw ----------
+let camX = 0, camY = 0;
+function draw(){
+  camX = W < VW ? (W - VW) / 2 : clamp(player.x - VW / 2, 0, W - VW);
+  camY = H < VH ? (H - VH) / 2 : clamp(player.y - 14 - VH / 2, 0, H - VH);
+  let sx = 0, sy = 0;
+  if (shake > 0 && !reduced) { sx = rand(-2, 2); sy = rand(-2, 2); }
+  ctx.fillStyle = '#d8b06a'; ctx.fillRect(0, 0, VW, VH);
+  ctx.save();
+  ctx.translate(Math.round(-camX + sx), Math.round(-camY + sy));
+  ctx.drawImage(bg, 0, 0);
+
+  // deputy badges
+  for (const k of pickups) {
+    if (k.life < 5 && (t * 8 | 0) % 2) continue;
+    const bob = Math.sin(t * 4 + k.x) * 2, glow = .25 + Math.sin(t * 6) * .1;
+    ctx.fillStyle = 'rgba(50,25,8,.3)'; ctx.fillRect(k.x - 6 | 0, k.y + 6 | 0, 12, 2);
+    ctx.fillStyle = `rgba(255,226,80,${glow})`; ctx.beginPath(); ctx.arc(k.x, k.y + bob, 11, 0, 6.28); ctx.fill();
+    if (BADGE.complete && BADGE.naturalWidth) ctx.drawImage(BADGE, k.x - 7 | 0, k.y - 8 + bob | 0, 14, 16);
+  }
+
+  // gold
+  for (const g of gold) {
+    const bob = Math.sin(t * 6 + g.x) * 1.5;
+    ctx.fillStyle = '#6b4a10'; ctx.fillRect(g.x - 3 | 0, g.y - 3 + bob | 0, 6, 6);
+    ctx.fillStyle = '#f2c14e'; ctx.fillRect(g.x - 2 | 0, g.y - 2 + bob | 0, 4, 4);
+    ctx.fillStyle = '#fff3b8'; ctx.fillRect(g.x - 2 | 0, g.y - 2 + bob | 0, 1, 1);
+  }
+
+  // y-sorted actors
+  const actors = enemies.map(e => ({ y: e.y, e }));
+  actors.push({ y: player.y, p: true });
+  if (deputy) actors.push({ y: deputy.y, d: true });
+  actors.sort((a, b) => a.y - b.y);
+  for (const a of actors) {
+    if (a.p) { drawPlayer(); continue; }
+    if (a.d) { drawDeputy(); continue; }
+    const e = a.e, frames = e.T.spr, img = frames[(e.step | 0) % 2];
+    ctx.fillStyle = 'rgba(50,25,8,.3)'; ctx.fillRect(e.x - e.r | 0, e.y - 1 | 0, e.r * 2, 3);
+    ctx.save(); ctx.translate(Math.round(e.x), Math.round(e.y));
+    if (e.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, -img.width / 2, -img.height);
+    if (e.flash > 0) { ctx.globalCompositeOperation = 'source-atop'; }
+    ctx.restore();
+    if (e.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(e.x - img.width / 2 + 2 | 0, e.y - img.height + 2 | 0, img.width - 4, img.height - 4); }
+    if (e.type === 'brute' && e.hp < e.maxHp) {
+      ctx.fillStyle = '#000'; ctx.fillRect(e.x - 14 | 0, e.y - img.height - 6 | 0, 28, 3);
+      ctx.fillStyle = '#c63c2a'; ctx.fillRect(e.x - 14 | 0, e.y - img.height - 6 | 0, 28 * e.hp / e.maxHp | 0, 3);
+    }
+  }
+  // bullets
+  ctx.fillStyle = '#fff2b0';
+  for (const b of bullets) { ctx.fillStyle = b.dep ? '#ffe36a' : '#fff2b0'; ctx.fillRect(b.x - 1 | 0, b.y - 1 | 0, 3, 3); ctx.fillStyle = 'rgba(255,230,150,.5)'; ctx.fillRect(b.x - b.vx * .012 | 0, b.y - b.vy * .012 | 0, 2, 2); ctx.fillStyle = '#fff2b0'; }
+  for (const b of ebullets) { ctx.fillStyle = '#2a1a0e'; ctx.fillRect(b.x - 2 | 0, b.y - 2 | 0, 5, 5); ctx.fillStyle = '#ff7a3c'; ctx.fillRect(b.x - 1 | 0, b.y - 1 | 0, 3, 3); }
+  for (const p of parts) { ctx.globalAlpha = Math.min(1, p.life * 3); ctx.fillStyle = p.col; ctx.fillRect(p.x | 0, p.y | 0, p.sz, p.sz); }
+  ctx.globalAlpha = 1;
+  ctx.font = '9px Rye, Georgia, serif'; ctx.textAlign = 'center';
+  for (const f of floaters) { ctx.globalAlpha = Math.min(1, f.life * 2); ctx.fillStyle = '#000'; ctx.fillText(f.text, f.x + 1, f.y + 1); ctx.fillStyle = f.col; ctx.fillText(f.text, f.x, f.y); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // sundown light
+  const k = clamp(t / DURATION, 0, 1);
+  if (k > 0) {
+    ctx.fillStyle = `rgba(${255 - k * 60 | 0},${120 - k * 70 | 0},${40 + k * 30 | 0},${k * .34})`;
+    ctx.fillRect(0, 0, VW, VH);
+  }
+  if (player.hp < player.maxHp * .3) {
+    const gr = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * .3, VW / 2, VH / 2, Math.max(VW, VH) * .7);
+    gr.addColorStop(0, 'rgba(120,0,0,0)'); gr.addColorStop(1, 'rgba(120,0,0,.45)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, VW, VH);
+  }
+  // touch stick
+  if (stick) {
+    const ox = stick.ox / S, oy = stick.oy / S;
+    ctx.strokeStyle = 'rgba(255,240,200,.5)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(ox, oy, 22, 0, 6.28); ctx.stroke();
+    const dx = (stick.x - stick.ox) / S, dy = (stick.y - stick.oy) / S, d = Math.hypot(dx, dy), m = Math.min(d, 22) / (d || 1);
+    ctx.fillStyle = 'rgba(255,240,200,.5)'; ctx.beginPath(); ctx.arc(ox + dx * m, oy + dy * m, 8, 0, 6.28); ctx.fill();
+  }
+}
+function drawDeputy(){
+  const d = deputy;
+  ctx.fillStyle = 'rgba(50,25,8,.3)'; ctx.fillRect(d.x - 9 | 0, d.y - 1 | 0, 18, 3);
+  const bob = d.moving ? Math.abs(Math.sin(d.step)) * -2 : 0;
+  if (!(d.t < 1 && (t * 14 | 0) % 2) && STEVEN.complete && STEVEN.naturalWidth) {
+    ctx.save(); ctx.translate(Math.round(d.x), Math.round(d.y + bob));
+    if (d.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(STEVEN, -STEVEN.naturalWidth / 2 | 0, -STEVEN.naturalHeight);
+    ctx.restore();
+  }
+  if (d.flash > 0) {
+    const fx = d.x + Math.cos(d.aim) * 16, fy = d.y - 20 + Math.sin(d.aim) * 16;
+    ctx.fillStyle = '#fff6c8'; ctx.fillRect(fx - 2 | 0, fy - 2 | 0, 5, 5);
+    ctx.fillStyle = '#ffb030'; ctx.fillRect(fx - 4 | 0, fy | 0, 2, 1); ctx.fillRect(fx + 3 | 0, fy | 0, 2, 1);
+  }
+  const w = 20;
+  ctx.fillStyle = '#000'; ctx.fillRect(d.x - w / 2 | 0, d.y - 42 | 0, w, 3);
+  ctx.fillStyle = '#f2d64b'; ctx.fillRect(d.x - w / 2 | 0, d.y - 42 | 0, w * d.t / DEPUTY_TIME | 0, 3);
+}
+function drawPlayer(){
+  const p = player;
+  ctx.fillStyle = 'rgba(50,25,8,.3)'; ctx.fillRect(p.x - 9 | 0, p.y - 1 | 0, 18, 3);
+  const bob = p.moving ? Math.abs(Math.sin(p.step)) * -2 : 0;
+  if (p.inv > 0 && (t * 20 | 0) % 2) return;
+  ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y + bob));
+  if (p.face < 0) ctx.scale(-1, 1);
+  if (SPR.complete && SPR.naturalWidth) ctx.drawImage(SPR, -SPR.naturalWidth / 2, -SPR.naturalHeight);
+  ctx.restore();
+  if (gun.flash > 0) {
+    const fx = p.x + Math.cos(gun.aim) * 16, fy = p.y - 20 + Math.sin(gun.aim) * 16;
+    ctx.fillStyle = '#fff6c8'; ctx.fillRect(fx - 2 | 0, fy - 2 | 0, 5, 5);
+    ctx.fillStyle = '#ffb030'; ctx.fillRect(fx - 4 | 0, fy | 0, 2, 1); ctx.fillRect(fx + 3 | 0, fy | 0, 2, 1); ctx.fillRect(fx | 0, fy - 4 | 0, 1, 2); ctx.fillRect(fx | 0, fy + 3 | 0, 1, 2);
+  }
+  if (gun.reloadT > 0) {
+    const w = 20, k = 1 - gun.reloadT / gun.reload;
+    ctx.fillStyle = '#000'; ctx.fillRect(p.x - w / 2 | 0, p.y - 46 | 0, w, 3);
+    ctx.fillStyle = '#e9b23b'; ctx.fillRect(p.x - w / 2 | 0, p.y - 46 | 0, w * k | 0, 3);
+  }
+}
+
+// ---------- HUD ----------
+const $ = id => document.getElementById(id);
+const hpI = $('hpbar').firstElementChild, xpI = $('xpbar').firstElementChild;
+function buildAmmo(){
+  const box = $('ammo'); if (!box) return;
+  if (box.children.length !== gun.mag) { box.innerHTML = ''; for (let i = 0; i < gun.mag; i++) box.appendChild(document.createElement('b')); }
+  [...box.children].forEach((b, i) => b.classList.toggle('spent', i >= gun.ammo));
+}
+let hudT = 0;
+function hud(dt){
+  hudT -= dt; if (hudT > 0) return; hudT = .1;
+  hpI.style.width = Math.max(0, player.hp / player.maxHp * 100) + '%';
+  xpI.style.width = xp / xpNeed * 100 + '%';
+  const left = Math.max(0, DURATION - t), m = left / 60 | 0, s = left % 60 | 0;
+  $('clock').textContent = `${m}:${String(s).padStart(2, '0')}`;
+  $('meta').textContent = `Level ${level}, ${kills} outlaws down`;
+  $('reload').textContent = gun.reloadT > 0 ? 'Reloading' : '';
+}
+
+// ---------- flow ----------
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+function finish(win){
+  if (state === 'over') return;
+  state = 'over';
+  $('endTitle').textContent = win ? 'Sundown' : 'Bowie’s down';
+  const m = t / 60 | 0, s = t % 60 | 0;
+  $('endText').textContent = win
+    ? `The town made it through the day. You brought down ${kills} outlaws and reached level ${level}.`
+    : `You held Main Street for ${m}:${String(s).padStart(2, '0')} and brought down ${kills} outlaws.`;
+  $('again').textContent = win ? 'Ride again' : 'Try again';
+  $('end').hidden = false; $('again').focus();
+}
+function start(){
+  reset(); state = 'play';
+  $('start').hidden = true; $('end').hidden = true; $('hud').hidden = false;
+  last = performance.now();
+  banner('Hold the town till sundown');
+}
+$('go').onclick = start; $('again').onclick = start;
+
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (state === 'play') { update(dt); hud(dt); }
+  if (player) draw(); else drawTitle();
+  requestAnimationFrame(frame);
+}
+function drawTitle(){
+  ctx.drawImage(bg, -(W - VW) / 2 | 0, -(500 - VH / 2) | 0);
+  ctx.fillStyle = 'rgba(30,15,6,.35)'; ctx.fillRect(0, 0, VW, VH);
+}
+(document.fonts ? Promise.race([document.fonts.load('16px Rye'), new Promise(r => setTimeout(r, 1500))]) : Promise.resolve())
+  .catch(() => {})
+  .then(() => Promise.all(Object.values(BSPR).map(s => s.img.complete ? 0 : new Promise(r => { s.img.onload = s.img.onerror = r; }))))
+  .then(() => { drawTown(); requestAnimationFrame(frame); });
+})();
+
+</script>
+</body>
+</html>
